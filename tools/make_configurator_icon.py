@@ -1,11 +1,12 @@
-"""Write configurator/totk-config.ico: the icon of totk.exe (runtime/totk.ico, the green ring) with a gold wrench across
-it, for the settings configurator (configurator/, totk-config.exe).
+"""Write totk-config.ico: the icon of totk.exe (runtime/totk.ico of the TotK PC recomp, the green ring) with a gold
+wrench across it, for the settings configurator (totk-config.exe).
 
-    .venv\\Scripts\\python tools\\make_configurator_icon.py
+    python tools/make_configurator_icon.py [--upstream DIR]   (DIR: a totk-pc-recomp checkout, default upstream/)
 
 Every size of runtime/totk.ico gets the wrench drawn at 4x that size and scaled down, so the small sizes stay clean.
 The wrench is drawn here from circles and rectangles; nothing else goes in. Needs Pillow.
 """
+import argparse
 import io
 import struct
 import sys
@@ -13,11 +14,10 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / 'runtime' / 'totk.ico'
-OUT = ROOT / 'configurator' / 'totk-config.ico'
+HERE = Path(__file__).resolve().parent.parent
+OUT = HERE / 'totk-config.ico'
 
-GOLD = (237, 194, 84)           # the configurator's accent (configurator/src/theme.rs GOLD)
+GOLD = (237, 194, 84)           # the configurator's accent (src/theme.rs GOLD)
 GOLD_LIGHT = (255, 230, 150)
 OUTLINE = (12, 24, 18)          # the configurator's background, so the wrench reads on the ring and on any desktop
 
@@ -95,9 +95,12 @@ def write_ico(frames, path):
 
 
 def main():
-    frames = [(n, with_wrench(img, n)) for n, img in read_ico(SRC)]
+    ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
+    ap.add_argument('--upstream', type=Path, default=HERE / 'upstream', help='a totk-pc-recomp checkout (default upstream/)')
+    src = ap.parse_args().upstream / 'runtime' / 'totk.ico'
+    frames = [(n, with_wrench(img, n)) for n, img in read_ico(src)]
     write_ico(frames, OUT)
-    print(f'wrote {OUT.relative_to(ROOT)}: {", ".join(str(n) for n, _ in frames)} px')
+    print(f'wrote {OUT.name}: {", ".join(str(n) for n, _ in frames)} px')
     return 0
 
 

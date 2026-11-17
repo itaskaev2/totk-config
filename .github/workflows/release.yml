@@ -1,0 +1,137 @@
+# Builds and releases totk-config for every new version of the TotK PC recomp.
+#
+# Every three hours: read VERSION at the recomp's main. When this repo has no release v<VERSION> yet, check the recomp
+# out at that commit, regenerate settings.json and the package version from it, test, build totk-config.exe, commit
+# the generated files (and the recomp commit, upstream-commit.txt) to main here, tag v<VERSION> and publish the
+# release. Only the default GITHUB_TOKEN is used.
+name: Release
+
+on:
+  schedule:
+    - cron: '23 */3 * * *'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Recomp tag or commit to build for (empty: main)'
+        required: false
+        default: ''
+      force:
+        description: 'Build even when the release exists (its files are replaced)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: valentderah/totk-pc-recomp
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.up.outputs.version }}
+      sha: ${{ steps.up.outputs.sha }}
+      build: ${{ steps.up.outputs.build }}
+    steps:
+      - id: up
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REF: ${{ inputs.ref || 'main' }}
+          FORCE: ${{ inputs.force || false }}
+        run: |
+          set -euo pipefail
+          sha=$(gh api "repos/$UPSTREAM/commits/$REF" --jq .sha)
+          version=$(gh api "repos/$UPSTREAM/contents/VERSION?ref=$sha" --jq .content | base64 -d | tr -d '[:space:]')
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::VERSION at $UPSTREAM@$sha is '$version', not a version"; exit 1
+          fi
+          if gh release view "v$version" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then exists=true; else exists=false; fi
+          build=false
+          if [ "$exists" = false ] || [ "$FORCE" = true ]; then build=true; fi
+          echo "Recomp $REF = ${sha:0:10}, VERSION $version; release v$version exists: $exists; build: $build" | tee -a "$GITHUB_STEP_SUMMARY"
+          { echo "version=$version"; echo "sha=$sha"; echo "build=$build"; } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      SHA: ${{ needs.check.outputs.sha }}
+      TOTK_RECOMP_DIR: ${{ github.workspace }}/upstream
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Check out the recomp at ${{ needs.check.outputs.sha }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ needs.check.outputs.sha }}
+          path: upstream
+          sparse-checkout: |
+            VERSION
+            runtime
+            totk.ini.example
+            docs/settings.md
+          sparse-checkout-cone-mode: false
+
+      - name: Generate settings.json and the version
+        run: |
+          python tools/gen_configurator_settings.py
+          python tools/gen_configurator_settings.py --check
+          echo "$SHA" > upstream-commit.txt
+          grep -m1 '^version = ' Cargo.toml
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --locked
+
+      - name: Build
+        run: |
+          cargo build --release --locked
+          mkdir dist
+          cp target/release/totk-config.exe LICENSE THIRD_PARTY_NOTICES.md dist/
+          (cd dist && sha256sum totk-config.exe > totk-config.exe.sha256 && cat totk-config.exe.sha256)
+
+      - name: Commit the generated files and tag v${{ env.VERSION }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
+          git add settings.json Cargo.toml Cargo.lock upstream-commit.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "Settings and version for TotK PC recomp $VERSION" -m "Generated from $UPSTREAM@$SHA."
+            git push origin HEAD:main
+          fi
+          git tag -f "v$VERSION"
+          git push -f origin "v$VERSION"
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ inputs.ref == '' }}
+        run: |
+          short=${SHA:0:10}
+          cat > notes.md <<EOF
+          totk-config for [TotK PC recomp $VERSION](https://github.com/$UPSTREAM/tree/$SHA): the settings list is made
+          from the recomp's \`main\` at [\`$short\`](https://github.com/$UPSTREAM/commit/$SHA).
+
+          Put \`totk-config.exe\` next to \`totk.exe\` and run it. SHA-256: \`$(cut -d' ' -f1 dist/totk-config.exe.sha256)\`
+          EOF
+          files=(dist/totk-config.exe dist/totk-config.exe.sha256 dist/LICENSE dist/THIRD_PARTY_NOTICES.md)
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            gh release edit "v$VERSION" --notes-file notes.md
+            gh release upload "v$VERSION" "${files[@]}" --clobber
+          else
+            gh release create "v$VERSION" "${files[@]}" --title "totk-config $VERSION" --notes-file notes.md --latest="$LATEST"
+          fi

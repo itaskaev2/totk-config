@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn repo_documents_add_nothing_unknown() {
         // the checked-in settings.json was made from these very files: overlaying them must not invent settings
-        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/..");
+        let root = env!("TOTK_RECOMP_DIR");
         let mut cat = Catalog::load();
         let ex = std::fs::read_to_string(format!("{root}/totk.ini.example")).unwrap();
         let md = std::fs::read_to_string(format!("{root}/docs/settings.md")).unwrap();

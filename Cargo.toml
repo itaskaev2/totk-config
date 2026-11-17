@@ -1,9 +1,10 @@
 [package]
-name = "totk-configurator"
-version = "0.1.0"
+name = "totk-config"
+version = "0.4.1"
 edition = "2021"
 description = "Settings configurator for the TotK PC recomp: edits totk.ini and settings profiles before the game starts"
 license = "MIT"
+repository = "https://github.com/itaskaev2/totk-config"
 publish = false
 
 [[bin]]
@@ -11,7 +12,7 @@ name = "totk-config"
 path = "src/main.rs"
 
 [dependencies]
-# MIT OR Apache-2.0. glow (OpenGL) only: no wgpu, no accesskit; fonts come from runtime/ui/fonts and the system.
+# MIT OR Apache-2.0. glow (OpenGL) only: no wgpu, no accesskit; fonts come from fonts/ and the system.
 eframe = { version = "0.36.2", default-features = false, features = ["glow"] }
 rfd = "0.15.4"            # MIT: the folder picker
 serde = { version = "1", features = ["derive"] }   # MIT OR Apache-2.0

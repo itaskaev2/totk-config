@@ -1,7 +1,11 @@
-"""Write configurator/settings.json: every setting the runtime knows, for the settings configurator (configurator/).
+"""Write settings.json: every setting the TotK PC recomp runtime knows, for the settings configurator (totk-config).
 
-    python tools/gen_configurator_settings.py           # rewrite configurator/settings.json
-    python tools/gen_configurator_settings.py --check   # exit 1 when the checked-in file is out of date
+    python tools/gen_configurator_settings.py [--upstream DIR]           # rewrite settings.json and the version
+    python tools/gen_configurator_settings.py [--upstream DIR] --check   # exit 1 when either is out of date
+
+DIR is a checkout of https://github.com/valentderah/totk-pc-recomp (default: $TOTK_RECOMP_DIR, else upstream/ next to
+Cargo.toml). Its VERSION file becomes the package version in Cargo.toml and Cargo.lock, so totk-config carries the
+version of the recomp it was made for.
 
 The configurator never carries a hand-written list. This script reads the runtime's own sources:
 
@@ -13,17 +17,20 @@ The configurator never carries a hand-written list. This script reads the runtim
 - totk.ini.example and docs/settings.md: the descriptions of the settings the menu does not show.
 - rt_knob("TOTK_NAME", "default") calls anywhere in runtime/: defaults of the keys outside metas[].
 
-Standard library only. A new setting in cfg.c shows up after a rerun; configurator/src/data.rs has a test that fails
+Standard library only. A new setting in cfg.c shows up after a rerun; src/data.rs has a test that fails
 when settings.json and runtime/cfg.c disagree, and so does --check here.
 """
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / 'configurator' / 'settings.json'
+HERE = Path(__file__).resolve().parent.parent
+OUT = HERE / 'settings.json'
+PACKAGE = 'totk-config'
+ROOT = Path(os.environ.get('TOTK_RECOMP_DIR') or HERE / 'upstream')   # the recomp checkout; --upstream sets it
 LANGS = {'en': 'text_en', 'ru': 'text_ru', 'pt-BR': 'text_pt_br', 'zh-Hans': 'text_zh_hans'}
 # The in-game menu's tabs that hold settings, in menu order (menu.cpp kTabNames), with the function that draws each.
 TABS = [('screen', 'UI_MENU_TAB_SCREEN', 'tab_screen'), ('game', 'UI_MENU_TAB_GAME', 'tab_game'),
@@ -504,23 +511,48 @@ def build():
     }
 
 
+def versioned():
+    """The recomp's VERSION and {path: new text} of Cargo.toml and Cargo.lock with the package version set to it."""
+    version = read('VERSION').strip()
+    if not re.fullmatch(r'\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?', version):
+        raise SystemExit(f'{ROOT / "VERSION"}: {version!r} is not a version')
+    out = {}
+    for name, head in (('Cargo.toml', r'\[package\]'), ('Cargo.lock', r'\[\[package\]\]')):
+        path = HERE / name
+        text = path.read_text(encoding='utf-8')
+        pattern = head + r'\nname = "' + re.escape(PACKAGE) + r'"\nversion = "[^"]*"'
+        new, n = re.subn(pattern, lambda m: m.group(0).rsplit('"', 2)[0] + f'"{version}"', text, count=1)
+        if n != 1:
+            raise SystemExit(f'{name}: no version line of package {PACKAGE}')
+        out[path] = new
+    return version, out
+
+
 def main():
+    global ROOT
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('--check', action='store_true', help='compare with the checked-in file instead of writing it')
+    ap.add_argument('--upstream', type=Path, help='the totk-pc-recomp checkout (default $TOTK_RECOMP_DIR or upstream/)')
+    ap.add_argument('--check', action='store_true', help='compare with the checked-in files instead of writing them')
     args = ap.parse_args()
-    text = json.dumps(build(), ensure_ascii=False, indent=1) + '\n'
+    if args.upstream:
+        ROOT = args.upstream.resolve()
+    if not (ROOT / 'runtime' / 'cfg.c').is_file():
+        print(f'{ROOT} is not a totk-pc-recomp checkout (no runtime/cfg.c)')
+        return 2
+    version, files = versioned()
+    files[OUT] = json.dumps(build(), ensure_ascii=False, indent=1) + '\n'
     if args.check:
-        have = OUT.read_text(encoding='utf-8') if OUT.exists() else ''
-        if have != text:
-            print(f'{OUT.relative_to(ROOT)} is out of date: run python tools/gen_configurator_settings.py')
+        stale = [p.name for p, text in files.items() if (p.read_text(encoding='utf-8') if p.exists() else '') != text]
+        if stale:
+            print(f'out of date with {ROOT} ({version}): {", ".join(stale)}; run python tools/gen_configurator_settings.py')
             return 1
-        print(f'{OUT.relative_to(ROOT)} is up to date')
+        print(f'settings.json and the version are up to date with {ROOT} ({version})')
         return 0
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(text, encoding='utf-8', newline='\n')
-    data = json.loads(text)
+    for path, text in files.items():
+        path.write_text(text, encoding='utf-8', newline='\n')
+    data = json.loads(files[OUT])
     in_menu = sum(1 for s in data['settings'] if s.get('in_menu'))
-    print(f'wrote {OUT.relative_to(ROOT)}: {len(data["settings"])} settings, {in_menu} in the in-game menu')
+    print(f'wrote settings.json for {version}: {len(data["settings"])} settings, {in_menu} in the in-game menu')
     return 0
 
 

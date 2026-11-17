@@ -148,8 +148,8 @@ mod tests {
 
     /// runtime/cfg.c, read directly: the test that fails when settings.json drifts from the runtime.
     fn cfg_c() -> String {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../runtime/cfg.c");
-        std::fs::read_to_string(path).expect("runtime/cfg.c next to configurator/")
+        let path = concat!(env!("TOTK_RECOMP_DIR"), "/runtime/cfg.c");
+        std::fs::read_to_string(path).expect("runtime/cfg.c of a TotK PC recomp checkout in upstream/ (or TOTK_RECOMP_DIR)")
     }
 
     fn array_body<'a>(text: &'a str, marker: &str) -> &'a str {
@@ -223,7 +223,7 @@ mod tests {
     #[test]
     fn example_round_trip() {
         use crate::ini::{self, Values};
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../totk.ini.example");
+        let path = concat!(env!("TOTK_RECOMP_DIR"), "/totk.ini.example");
         let text = std::fs::read_to_string(path).unwrap();
         let catalog = Catalog::load();
         let section_of = |k: &str| catalog.section_of(k);

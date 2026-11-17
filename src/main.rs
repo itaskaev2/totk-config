@@ -1,6 +1,7 @@
 //! totk-config: the settings configurator of the TotK PC recomp. It sits next to totk.exe and edits totk.ini (and the
 //! settings profiles in profiles/) before the game starts. Every setting it shows comes from settings.json, which
-//! tools/gen_configurator_settings.py writes from the runtime's sources.
+//! tools/gen_configurator_settings.py writes from the runtime's sources; the package version is the recomp version
+//! (its VERSION file) that settings.json was made from.
 //!
 //!     totk-config [--dir <game folder>] [--lang en|ru|pt-BR|zh-Hans]
 //!     totk-config [--dir <folder>] --set fps_limit=120 [--set fov=] ...   (no window; an empty value resets)
@@ -267,7 +268,7 @@ fn icon_png(ico: &[u8]) -> Option<&[u8]> {
 
 fn window(args: Args, dir: Option<PathBuf>) -> eframe::Result {
     let mut viewport = eframe::egui::ViewportBuilder::default()
-        .with_title("TotK Settings")
+        .with_title(concat!("TotK Settings ", env!("CARGO_PKG_VERSION")))
         .with_inner_size([1240.0, 820.0])
         .with_min_inner_size([920.0, 600.0]);
     if let Some(icon) = icon_png(ICON).and_then(|png| eframe::icon_data::from_png_bytes(png).ok()) {

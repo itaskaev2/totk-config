@@ -1,5 +1,5 @@
 //! The look: the in-game menu's colours (runtime/ui/menu.cpp style_init: dark green panels, gold accents) and fonts
-//! (Roboto Medium from runtime/ui/fonts, Apache-2.0), with the system's fonts behind it for symbols and CJK text.
+//! (Roboto Medium, Apache-2.0, in fonts/: the font of the in-game menu, runtime/ui/fonts upstream), with the system's fonts behind it for symbols and CJK text.
 use eframe::egui::{self, Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle};
 use std::sync::Arc;
 
@@ -15,7 +15,7 @@ pub const WEAK: Color32 = Color32::from_rgb(158, 163, 148);
 pub const RED: Color32 = Color32::from_rgb(232, 110, 90);
 pub const BUTTON: Color32 = Color32::from_rgb(36, 56, 46);
 
-const ROBOTO: &[u8] = include_bytes!("../../runtime/ui/fonts/Roboto-Medium.ttf");
+const ROBOTO: &[u8] = include_bytes!("../fonts/Roboto-Medium.ttf");
 
 /// System font files that fill what Roboto lacks: symbols, Chinese, Japanese and Korean (the language names of the
 /// game's language list). Missing files are skipped.

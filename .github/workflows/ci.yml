@@ -1,0 +1,45 @@
+# Tests every push and pull request against the recomp commit settings.json was made from (upstream-commit.txt).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    env:
+      TOTK_RECOMP_DIR: ${{ github.workspace }}/upstream
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: up
+        run: echo "sha=$(tr -d '[:space:]' < upstream-commit.txt)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          repository: valentderah/totk-pc-recomp
+          ref: ${{ steps.up.outputs.sha }}
+          path: upstream
+          sparse-checkout: |
+            VERSION
+            runtime
+            totk.ini.example
+            docs/settings.md
+          sparse-checkout-cone-mode: false
+
+      - name: settings.json and the version match the recomp
+        run: python tools/gen_configurator_settings.py --check
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo test --locked
+
+      - run: cargo build --release --locked
