@@ -85,9 +85,12 @@ fn parse_args() -> Args {
     a
 }
 
+/// The game's executable: totk.exe on Windows, totk on Linux (tools/build_game.py EXE).
+pub const GAME_EXE: &str = if cfg!(windows) { "totk.exe" } else { "totk" };
+
 /// A folder the game reads totk.ini from: the runtime looks next to totk.exe (cfg.c find_ini) and nowhere else.
 pub fn is_game_dir(dir: &Path) -> bool {
-    dir.join("totk.exe").is_file() || dir.join("totk.ini").is_file()
+    dir.join(GAME_EXE).is_file() || dir.join("totk.ini").is_file()
 }
 
 /// The per-user folder the installer keeps its state in (installer/recent.py), where the configurator remembers the

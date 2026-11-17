@@ -9,8 +9,10 @@ file). A GitHub Actions job checks the recomp's `main` every three hours and, wh
 no release here yet, regenerates the settings list from that commit, runs the tests, builds the exe and publishes the
 release `v<version>`.
 
-Download: [Releases](https://github.com/itaskaev2/totk-config/releases/latest), `totk-config.exe` (Windows x86-64,
-no installer, nothing else needed).
+Download: [Releases](https://github.com/itaskaev2/totk-config/releases/latest).
+
+- Windows x86-64: `totk-config.exe`, no installer, nothing else needed.
+- Linux x86-64: `totk-config-linux-x86_64.tar.gz` (the binary `totk-config` with the licence files). See "Linux" below.
 
 ![totk-config, the Screen tab](docs/screenshot.png)
 
@@ -46,6 +48,22 @@ or newer one works too, see "New settings without a new configurator" below.
   `tools/gen_configurator_settings.py` writes) replaces the built-in list whole. The bottom of the left column lists
   the files it read.
 
+### Linux
+
+The recomp also builds and runs on x86-64 Linux, where the game is `totk` instead of `totk.exe`. Unpack the archive and
+put `totk-config` next to `totk`:
+
+```
+tar -xzf totk-config-linux-x86_64.tar.gz
+cp totk-config/totk-config /path/to/game/ && /path/to/game/totk-config
+```
+
+It opens an X11 or Wayland window (OpenGL through EGL or GLX; libX11, libwayland-client, libxkbcommon and libGL/libEGL
+are loaded at run time, as any desktop has them), needs glibc 2.35 or newer (Ubuntu 22.04, Debian 12, SteamOS 3 and
+later) and uses the XDG desktop portal for the folder picker. The Updates tab is Windows-only: the recomp's releases are
+Windows installers, so on Linux update the game the way you built it. Its own settings go to
+`$XDG_STATE_HOME/TotK Recomp` (`~/.local/state/TotK Recomp`).
+
 Without a window: `totk-config --set fps_limit=120 --set fov=` (an empty value resets), `totk-config --check-update`,
 `totk-config --new-profile Travel --from deck`, `totk-config --profile Travel`; `--dir <folder>` names the game folder.
 
@@ -63,7 +81,9 @@ cargo build --release --locked                 # target\release\totk-config.exe
 
 `cargo build` alone needs no checkout: `settings.json` is committed. With the GNU Rust toolchain (no MSVC), crates
 that use the `windows` bindings need `dlltool` from MinGW-w64 (WinLibs or MSYS2 UCRT64) on PATH, and `build.rs` runs
-its `windres` to embed the icon. CI uses the MSVC toolchain on `windows-latest`.
+its `windres` to embed the icon. CI uses the MSVC toolchain on `windows-latest`. On Linux a C compiler is enough
+(`ring` builds C and assembly); no `-dev` packages are needed, since the window system libraries are loaded at run time
+and HTTPS goes through rustls. CI builds the Linux binary on `ubuntu-22.04`.
 
 `settings.json` is never edited by hand. `tools/gen_configurator_settings.py` writes it from the recomp's
 `runtime/cfg.c` (`known[]`, `metas[]`, `sections[]`), `runtime/ui/menu.cpp` (tabs, groups, order, slider ranges,
@@ -85,14 +105,16 @@ with a wrench drawn over it by `python tools/make_configurator_icon.py` (Pillow)
 | `src/prefs.rs` | The configurator's own settings (`configurator.json`). |
 | `src/app.rs`, `src/theme.rs`, `src/i18n.rs` | The window, the in-game menu's colours and font, the window's own words in English and Russian. |
 | `.github/workflows/release.yml` | The check of the recomp's `main` and the build and release of a new version. |
-| `.github/workflows/ci.yml` | Tests of every push and pull request against the recomp version in `Cargo.toml`. |
+| `.github/workflows/ci.yml` | Tests of every push and pull request on Windows and Linux against the recomp commit in `upstream-commit.txt`. |
+| `tools/third_party_crates.py` | The crate licence tables of `THIRD_PARTY_NOTICES.md`, per target, from `Cargo.lock`. |
 
 ### Releases
 
 `release.yml` runs every three hours and on demand (Actions, "Release", Run workflow). It reads `VERSION` at the
 recomp's `main` and stops when the release `v<VERSION>` exists here. Otherwise it checks out the recomp at that
 commit, runs the generator, `cargo test` and the release build, commits the new `settings.json` and version to `main`
-here, tags it `v<VERSION>` and publishes the release with `totk-config.exe`, its SHA-256 and the licence files. Run
+here, tags it `v<VERSION>` and publishes the release with `totk-config.exe` (built on `windows-latest`),
+`totk-config-linux-x86_64.tar.gz` (built on `ubuntu-22.04`), their SHA-256 and the licence files. Run
 it by hand with **force** to rebuild the current version (for a change in this repo; the release's files are
 replaced), or with **ref** set to a recomp tag or commit. It needs nothing but the default `GITHUB_TOKEN`.
 

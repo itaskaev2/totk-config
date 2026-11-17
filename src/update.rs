@@ -136,11 +136,18 @@ pub fn parse_release(json: &str, base: &str) -> Result<Release, String> {
     })
 }
 
-/// HTTPS through the system's TLS and certificate store (Schannel on Windows).
+/// HTTPS through the system's TLS and certificate store on Windows (Schannel), through rustls and its built-in Mozilla
+/// root list elsewhere.
 fn agent(read_timeout: Duration) -> ureq::Agent {
+    #[cfg(windows)]
     let tls = ureq::tls::TlsConfig::builder()
         .provider(ureq::tls::TlsProvider::NativeTls)
         .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+        .build();
+    #[cfg(not(windows))]
+    let tls = ureq::tls::TlsConfig::builder()
+        .provider(ureq::tls::TlsProvider::Rustls)
+        .root_certs(ureq::tls::RootCerts::WebPki)
         .build();
     ureq::Agent::config_builder()
         .tls_config(tls)
@@ -431,6 +438,7 @@ pub fn setup_command(release: &Path, game: &Path) -> Command {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
     use std::net::TcpListener;
 
     fn api_json(base: &str, size: u64, sha: &str) -> String {
@@ -512,6 +520,7 @@ mod tests {
         std::fs::read(&zip).unwrap()
     }
 
+    #[cfg(windows)]
     fn sha_hex(bytes: &[u8]) -> String {
         Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
     }
@@ -587,6 +596,7 @@ mod tests {
     }
 
     /// An HTTP server on this machine for `requests` requests: routes[path] with status 200, else 404. Returns its address.
+    #[cfg(windows)]
     fn serve_on(l: TcpListener, routes: Vec<(String, Vec<u8>)>, requests: usize) -> String {
         let base = format!("http://127.0.0.1:{}", l.local_addr().unwrap().port());
         std::thread::spawn(move || {

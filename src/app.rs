@@ -338,7 +338,7 @@ impl App {
             return;
         }
         let Some(dir) = self.dir.clone() else { return };
-        let exe = dir.join(if cfg!(windows) { "totk.exe" } else { "totk" });
+        let exe = dir.join(crate::GAME_EXE);
         match std::process::Command::new(&exe).current_dir(&dir).spawn() {
             Ok(_) => self.say(ui, t(&self.lang, "Launched totk.exe"), false),
             Err(e) => self.say(ui, format!("{}: {e}", t(&self.lang, "Could not launch totk.exe")), true),
@@ -468,7 +468,7 @@ impl App {
             });
         });
         if let Some(d) = &self.dir {
-            if !d.join("totk.exe").is_file() {
+            if !d.join(crate::GAME_EXE).is_file() {
                 ui.label(RichText::new(t(&self.lang, "totk.exe is not in this folder; totk.ini is written here anyway.")).small().color(WEAK));
             }
         }
@@ -613,7 +613,7 @@ impl App {
             self.sources_note(ui);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let can = self.dir.is_some();
-                let exe = self.dir.as_ref().is_some_and(|d| d.join("totk.exe").is_file());
+                let exe = self.dir.as_ref().is_some_and(|d| d.join(crate::GAME_EXE).is_file());
                 if ui
                     .add_enabled(can && exe, egui::Button::new(RichText::new(format!("▶  {}", t(&self.lang, "Save and launch"))).strong()).fill(theme::GREEN_BRIGHT))
                     .clicked()

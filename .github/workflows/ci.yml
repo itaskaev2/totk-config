@@ -11,7 +11,14 @@ permissions:
 
 jobs:
   test:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            py: python
+          - os: ubuntu-22.04
+            py: python3
+    runs-on: ${{ matrix.os }}
     env:
       TOTK_RECOMP_DIR: ${{ github.workspace }}/upstream
     defaults:
@@ -36,7 +43,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: settings.json and the version match the recomp
-        run: python tools/gen_configurator_settings.py --check
+        run: ${{ matrix.py }} tools/gen_configurator_settings.py --check
 
       - uses: Swatinem/rust-cache@v2
 

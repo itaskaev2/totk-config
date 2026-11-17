@@ -1,7 +1,7 @@
 # Builds and releases totk-config for every new version of the TotK PC recomp.
 #
 # Every three hours: read VERSION at the recomp's main. When this repo has no release v<VERSION> yet, check the recomp
-# out at that commit, regenerate settings.json and the package version from it, test, build totk-config.exe, commit
+# out at that commit, regenerate settings.json and the package version from it, test and build on Windows and Linux, commit
 # the generated files (and the recomp commit, upstream-commit.txt) to main here, tag v<VERSION> and publish the
 # release. Only the default GITHUB_TOKEN is used.
 name: Release
@@ -59,7 +59,17 @@ jobs:
   build:
     needs: check
     if: needs.check.outputs.build == 'true'
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            py: python
+            name: windows
+          # 22.04: the oldest glibc (2.35) GitHub still builds on, so the binary runs on older distributions too
+          - os: ubuntu-22.04
+            py: python3
+            name: linux
+    runs-on: ${{ matrix.os }}
     env:
       VERSION: ${{ needs.check.outputs.version }}
       SHA: ${{ needs.check.outputs.sha }}
@@ -87,8 +97,8 @@ jobs:
 
       - name: Generate settings.json and the version
         run: |
-          python tools/gen_configurator_settings.py
-          python tools/gen_configurator_settings.py --check
+          ${{ matrix.py }} tools/gen_configurator_settings.py
+          ${{ matrix.py }} tools/gen_configurator_settings.py --check
           echo "$SHA" > upstream-commit.txt
           grep -m1 '^version = ' Cargo.toml
 
@@ -101,11 +111,48 @@ jobs:
         run: |
           cargo build --release --locked
           mkdir dist
-          cp target/release/totk-config.exe LICENSE THIRD_PARTY_NOTICES.md dist/
-          (cd dist && sha256sum totk-config.exe > totk-config.exe.sha256 && cat totk-config.exe.sha256)
+          if [ "${{ matrix.name }}" = windows ]; then
+            cp target/release/totk-config.exe dist/
+          else
+            mkdir totk-config
+            cp target/release/totk-config LICENSE THIRD_PARTY_NOTICES.md totk-config/
+            tar -czf dist/totk-config-linux-x86_64.tar.gz totk-config
+          fi
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.name }}
+          path: dist/
+
+      - if: matrix.name == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated
+          path: |
+            settings.json
+            Cargo.toml
+            Cargo.lock
+            upstream-commit.txt
+
+  publish:
+    needs: [check, build]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.check.outputs.version }}
+      SHA: ${{ needs.check.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Commit the generated files and tag v${{ env.VERSION }}
         run: |
+          cp artifacts/generated/* .
           git config user.name 'github-actions[bot]'
           git config user.email '41898099+github-actions[bot]@users.noreply.github.com'
           git add settings.json Cargo.toml Cargo.lock upstream-commit.txt
@@ -121,14 +168,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           LATEST: ${{ inputs.ref == '' }}
         run: |
+          mkdir dist
+          cp artifacts/dist-windows/* artifacts/dist-linux/* LICENSE THIRD_PARTY_NOTICES.md dist/
+          (cd dist && sha256sum totk-config.exe > totk-config.exe.sha256 \
+            && sha256sum totk-config-linux-x86_64.tar.gz > totk-config-linux-x86_64.tar.gz.sha256 && cat *.sha256)
           short=${SHA:0:10}
           cat > notes.md <<EOF
           totk-config for [TotK PC recomp $VERSION](https://github.com/$UPSTREAM/tree/$SHA): the settings list is made
           from the recomp's \`main\` at [\`$short\`](https://github.com/$UPSTREAM/commit/$SHA).
 
-          Put \`totk-config.exe\` next to \`totk.exe\` and run it. SHA-256: \`$(cut -d' ' -f1 dist/totk-config.exe.sha256)\`
+          - Windows x86-64: \`totk-config.exe\`. Put it next to \`totk.exe\` and run it.
+          - Linux x86-64: \`totk-config-linux-x86_64.tar.gz\`. Unpack it and put \`totk-config\` next to the game's \`totk\`
+            (X11 or Wayland, glibc 2.35 or newer).
+
+          | File | SHA-256 |
+          | --- | --- |
+          | \`totk-config.exe\` | \`$(cut -d' ' -f1 dist/totk-config.exe.sha256)\` |
+          | \`totk-config-linux-x86_64.tar.gz\` | \`$(cut -d' ' -f1 dist/totk-config-linux-x86_64.tar.gz.sha256)\` |
           EOF
-          files=(dist/totk-config.exe dist/totk-config.exe.sha256 dist/LICENSE dist/THIRD_PARTY_NOTICES.md)
+          files=(dist/*)
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             gh release edit "v$VERSION" --notes-file notes.md
             gh release upload "v$VERSION" "${files[@]}" --clobber
