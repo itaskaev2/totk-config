@@ -16,8 +16,10 @@
 //!   folder's totk.exe runs.
 //!
 //! The version installed: `logs/totk.log` names the totk.exe that ran last ("version: TotK Recomp 0.4.1+6151ac4f");
-//! `totk-install.json` names the release whose setup made the folder. When the two differ, or totk.exe is newer than
-//! the setup's record, the folder holds a build of its own, which an update replaces: the window says so first.
+//! `totk-install.json` names the release whose setup made the folder. A log older than that record comes from before
+//! the setup ran (an update the game has not run since) and is not read: the setup's release is the version then.
+//! When the two differ, or totk.exe is newer than the setup's record, the folder holds a build of its own, which an
+//! update replaces: the window says so first.
 //!
 //! TOTK_CONFIG_UPDATE_API names another API address for tests, accepted only on http://127.0.0.1 or http://localhost.
 use serde::Deserialize;
@@ -175,7 +177,7 @@ pub fn check() -> Result<Release, String> {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Installed {
-    /// The totk.exe that ran last (logs/totk.log).
+    /// The totk.exe that ran last (logs/totk.log), when it ran after the setup's record was written.
     pub run: Option<String>,
     /// The release whose setup made the folder (totk-install.json "release").
     pub setup: Option<String>,
@@ -198,13 +200,17 @@ pub fn version_in_log(text: &str) -> Option<String> {
 }
 
 pub fn installed(dir: &Path) -> Installed {
-    let run = std::fs::read_to_string(dir.join("logs").join("totk.log")).ok().and_then(|t| version_in_log(&t));
+    let log = dir.join("logs").join("totk.log");
     let record = dir.join("totk-install.json");
+    let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    // A log written before the setup's record is from the build the setup replaced: after an update the game has not
+    // run since, it still names the old version, which read as a build of its own and offered the same update again.
+    let stale = matches!((mtime(&log), mtime(&record)), (Some(l), Some(r)) if l < r);
+    let run = if stale { None } else { std::fs::read_to_string(&log).ok().and_then(|t| version_in_log(&t)) };
     let setup = std::fs::read_to_string(&record)
         .ok()
         .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
         .and_then(|v| v.get("release")?.as_str().map(str::to_string));
-    let mtime = |p: &Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
     // the setup writes totk-install.json after it links totk.exe; a totk.exe more than a minute newer came later
     let exe_newer = match (mtime(&dir.join("totk.exe")), mtime(&record)) {
         (Some(e), Some(r)) => e.duration_since(r).is_ok_and(|d| d > Duration::from_secs(60)),
@@ -502,6 +508,12 @@ mod tests {
         std::fs::write(d.join("logs/totk.log"), "[host] version: TotK Recomp 0.4.0, game 1.4.3\n").unwrap();
         let i = installed(&d);
         assert_eq!((i.version(), i.custom), (Some((0, 4, 0)), true), "a build of its own");
+        // an update the game has not run since: the log is older than the setup's record and names the old release
+        std::fs::write(d.join("logs/totk.log"), "[host] version: TotK Recomp 0.3.11, game 1.4.3\n").unwrap();
+        let old = std::time::SystemTime::now() - Duration::from_secs(3600);
+        std::fs::OpenOptions::new().write(true).open(d.join("logs/totk.log")).unwrap().set_modified(old).unwrap();
+        let i = installed(&d);
+        assert_eq!((i.run.as_deref(), i.version(), i.custom), (None, Some((0, 4, 1)), false), "a log from before the setup");
         let _ = std::fs::remove_dir_all(&d);
     }
 

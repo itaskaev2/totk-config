@@ -1409,7 +1409,7 @@ impl App {
                 }
             })
             .response
-            .on_hover_text(t(&l, "The version of the totk.exe that ran last, from logs/totk.log."));
+            .on_hover_text(t(&l, "The version of the totk.exe that ran last, from logs/totk.log; until the game runs after the setup, the setup's release."));
             if let Some(setup) = &installed.setup {
                 ui.label(RichText::new(format!("{} {setup}", t(&l, "Set up with release"))).small().color(WEAK))
                     .on_hover_text("totk-install.json");

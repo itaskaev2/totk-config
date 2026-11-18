@@ -142,7 +142,7 @@ pub fn t(lang: &str, text: &'static str) -> &'static str {
         "Not now" => "Не сейчас",
         "custom build" => "своя сборка",
         "Set up with release" => "Установлено релизом",
-        "The version of the totk.exe that ran last, from logs/totk.log." => "Версия totk.exe, который запускался последним (из logs/totk.log).",
+        "The version of the totk.exe that ran last, from logs/totk.log; until the game runs after the setup, the setup's release." => "Версия totk.exe, который запускался последним (из logs/totk.log); пока игру не запускали после установки, версия установщика.",
         "An update installs the official build of the release in place of this one." => "Обновление поставит вместо неё официальную сборку релиза.",
         "Your saves, game files and settings stay. The setup rebuilds totk.exe and the shaders (a few minutes) and starts the game when done." =>
             "Сохранения, файлы игры и настройки останутся. Установщик пересоберёт totk.exe и шейдеры (несколько минут) и запустит игру, когда закончит.",
