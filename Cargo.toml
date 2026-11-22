@@ -1,6 +1,6 @@
 [package]
 name = "totk-config"
-version = "0.4.1"
+version = "0.5.0"
 edition = "2021"
 description = "Settings configurator for the TotK PC recomp: edits totk.ini and settings profiles before the game starts"
 license = "MIT"
